@@ -1,0 +1,289 @@
+// Royal Casino data model (SQLite, local only)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Identity & access
+ * ------------------------------------------------------------------
+ */
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id                String            @id @default(cuid())
+  /// lowercase, [a-z0-9_]{3,20}
+  username          String            @unique
+  /// lowercase; null only for seeded showcase players
+  email             String?           @unique
+  displayName       String
+  /// Argon2id PHC string. Null = account cannot sign in (seeded showcase players).
+  passwordHash      String?
+  role              Role              @default(USER)
+  /// Crown Points. Only ever increased by stakes placed in games (simulated activity).
+  vipPoints         Int               @default(0)
+  /// preset avatar id from src/lib/avatars.ts
+  avatar            String            @default("crown")
+  /// show this player's display name on the public "recent winners" board
+  showOnWinners     Boolean           @default(true)
+  /// active | suspended. Suspended accounts cannot sign in; their sessions are revoked.
+  status            String            @default("active")
+  statusReason      String?
+  statusChangedAt   DateTime?
+  passwordChangedAt DateTime?
+  lastLoginAt       DateTime?
+  wallet            Wallet?
+  sessions          Session[]
+  favorites         Favorite[]
+  auditLogs         AuditLog[]
+  rounds            GameRound[]
+  achievements      UserAchievement[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model Session {
+  /// SHA-256 of the random session token. The raw token only ever lives in the cookie.
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Money (virtual credits, stored as integer cents)
+ * ------------------------------------------------------------------
+ */
+
+model Wallet {
+  id              String        @id @default(cuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// cents. Only ever changed by src/lib/wallet/service.ts on the server.
+  balance         Int           @default(0)
+  /// CREDITS | BTC | ETH | USDT. Display preference only; the balance is always held in credits.
+  displayCurrency String        @default("CREDITS")
+  lastBonusAt     DateTime?
+  /// consecutive days the daily bonus was claimed (resets after a missed day)
+  bonusStreak     Int           @default(0)
+  transactions    Transaction[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+/// Ledger. Every balance change writes exactly one completed row.
+/// Demo deposits start as "pending" rows that do not touch the balance until confirmed.
+model Transaction {
+  id             String    @id @default(cuid())
+  /// short public reference shown to the player, e.g. RC-7K2M9QX4TB
+  reference      String?   @unique
+  walletId       String
+  wallet         Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  /// signup | bonus | bet | win | refund | adjustment | deposit
+  type           String
+  /// pending | completed | failed | cancelled | expired
+  status         String    @default("completed")
+  /// cents; negative for debits
+  amount         Int
+  /// balance right after this row was applied; null while not applied (pending/failed/...)
+  balanceAfter   Int?
+  gameId         String?
+  game           Game?     @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  /// win multiplier relative to the stake, for "win" rows
+  multiplier     Float?
+  /// free-text note, e.g. the reason for an admin adjustment
+  note           String?
+  /// Demo deposits only: BTC | ETH | USDT, the simulated coin amount and the fake address.
+  currency       String?
+  cryptoAmount   String?
+  demoAddress    String?
+  /// Client-generated request id. Replaying the same request never creates a second row.
+  idempotencyKey String?
+  expiresAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([walletId, idempotencyKey])
+  @@index([walletId, createdAt])
+  @@index([walletId, status])
+  @@index([type, createdAt])
+}
+
+/// Append-only audit trail. Nothing in the app updates or deletes these rows.
+model AuditLog {
+  id            String   @id @default(cuid())
+  /// who performed the action (the player, or an admin acting on them)
+  actorId       String?
+  /// the account an admin action was about (role, status, wallet), for per-user audit views
+  targetUserId  String?
+  actor         User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  walletId      String?
+  wallet        Wallet?  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  /// e.g. deposit.created, deposit.confirmed, bonus.claimed, admin.adjustment
+  action        String
+  transactionId String?
+  /// cents, when the event moved money
+  amount        Int?
+  balanceBefore Int?
+  balanceAfter  Int?
+  /// JSON string with extra context
+  details       String?
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([action, createdAt])
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Catalogue
+ * ------------------------------------------------------------------
+ */
+
+model Game {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  studio       String
+  /// slots | live | table | jackpots | instant
+  category     String
+  tagline      String
+  description  String
+  rtp          Float
+  /// low | medium | high
+  volatility   String
+  /// cents
+  minBet       Int
+  /// cents
+  maxBet       Int
+  /// slots | blackjack | roulette | holdem: which engine plays this game
+  engine       String        @default("slots")
+  /// disabled games are hidden from the lobby and cannot start new rounds
+  enabled      Boolean       @default(true)
+  /// engine options as JSON, e.g. {"opponents":3} for hold'em
+  config       String?
+  /// cents: current progressive pool, only for jackpot games
+  jackpot      Int?
+  /// cents: value the pool resets to after it is won
+  jackpotSeed  Int?
+  players      Int           @default(0)
+  /// key into the icon map in src/lib/constants.ts
+  icon         String
+  /// key into the artwork palette map in src/lib/constants.ts
+  palette      String
+  isNew        Boolean       @default(false)
+  isHot        Boolean       @default(false)
+  isFeatured   Boolean       @default(false)
+  favorites    Favorite[]
+  transactions Transaction[]
+  rounds       GameRound[]
+  createdAt    DateTime      @default(now())
+
+  @@index([category])
+}
+
+/// One game round, held on the server. `state` contains secret data (shuffled shoe or deck,
+/// hidden cards) and is never sent to the browser; clients receive a derived view.
+model GameRound {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameId        String
+  game          Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  /// slots | blackjack | roulette | holdem
+  engine        String
+  /// active | settled
+  status        String    @default("active")
+  /// JSON engine state (server only)
+  state         String
+  /// optimistic-concurrency counter; every accepted action increments it
+  version       Int       @default(0)
+  /// request id that opened the round; replays return this round instead of a new one
+  requestId     String
+  /// request id of the last accepted action, so a retried action is answered, not re-applied
+  lastRequestId String?
+  /// cents wagered and returned over the whole round
+  staked        Int       @default(0)
+  returned      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  settledAt     DateTime?
+  /// JSON result summary written at settlement (label, detail, tags) for history and achievements
+  summary       String?
+
+  @@unique([userId, requestId])
+  @@index([userId, engine, status])
+  @@index([gameId, createdAt])
+}
+
+model Favorite {
+  userId    String
+  gameId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, gameId])
+}
+
+model Promotion {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  subtitle    String
+  description String
+  reward      String
+  /// welcome | weekly | tournament | vip
+  kind        String
+  /// newline-separated terms
+  terms       String
+  endsAt      DateTime?
+  sortOrder   Int       @default(0)
+}
+
+model VipTier {
+  id         String @id @default(cuid())
+  level      Int    @unique
+  name       String
+  minPoints  Int
+  /// legacy column, no longer used (cashback is not offered)
+  cashback   Float  @default(0)
+  /// cents: base daily demo bonus at this tier
+  dailyBonus Int    @default(100000)
+  /// newline-separated perks (each one is implemented)
+  perks      String
+}
+
+/// Badges a player has earned. Rows are only ever added.
+model UserAchievement {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// key into src/lib/achievements.ts
+  code       String
+  unlockedAt DateTime @default(now())
+
+  @@id([userId, code])
+}

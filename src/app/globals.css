@@ -1,0 +1,247 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Royal Casino design tokens
+   ------------------------------------------------------------------ */
+@theme {
+  --color-ink: #0b0b0d;
+  --color-ink-2: #101012;
+  --color-surface: #151515;
+  --color-surface-2: #1b1b1d;
+  --color-surface-3: #232326;
+  --color-line: #2a2824;
+  --color-line-strong: #3a3528;
+
+  --color-gold: #d4af62;
+  --color-gold-2: #b89550;
+  --color-gold-light: #f1d99b;
+  --color-gold-deep: #8a6a2f;
+
+  --color-ivory: #f4efe4;
+  --color-muted: #a39e93;
+  --color-subtle: #6f6b63;
+
+  --color-ruby: #c2414b;
+  --color-jade: #3fae7c;
+
+  --font-display: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-gold: 0 0 0 1px rgb(212 175 98 / 0.35), 0 10px 40px -10px rgb(212 175 98 / 0.35);
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 20px 50px -25px rgb(0 0 0 / 0.9);
+
+  --animate-shimmer: shimmer 3.2s linear infinite;
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-pulse-gold: pulse-gold 2.4s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes pulse-gold {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(63 174 124 / 0.6); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 5px rgb(63 174 124 / 0); }
+  }
+}
+
+/* ------------------------------------------------------------------
+   Base
+   ------------------------------------------------------------------ */
+@layer base {
+  :root {
+    color-scheme: dark;
+    --header-h: 4.5rem;
+    --sidebar-w: 16.5rem;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-ivory);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
+  }
+
+  /* subtle ambient glow across the whole app */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60rem 30rem at 85% -10%, rgb(212 175 98 / 0.08), transparent 60%),
+      radial-gradient(40rem 30rem at -10% 110%, rgb(184 149 80 / 0.06), transparent 60%);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+  }
+
+  ::selection {
+    background: rgb(212 175 98 / 0.35);
+    color: var(--color-ivory);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 999px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------
+   Utilities
+   ------------------------------------------------------------------ */
+@utility text-gold-gradient {
+  background-image: linear-gradient(
+    100deg,
+    #b89550 0%,
+    #f1d99b 30%,
+    #d4af62 50%,
+    #fff1c8 62%,
+    #b89550 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility bg-gold-gradient {
+  background-image: linear-gradient(135deg, #f1d99b 0%, #d4af62 40%, #b89550 75%, #8a6a2f 100%);
+}
+
+@utility border-gold-gradient {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    linear-gradient(135deg, rgb(241 217 155 / 0.7), rgb(184 149 80 / 0.15) 40%, rgb(212 175 98 / 0.6))
+      border-box;
+}
+
+@utility gold-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(212 175 98 / 0.55), transparent);
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@utility bg-pattern-deco {
+  background-image:
+    repeating-linear-gradient(45deg, rgb(212 175 98 / 0.05) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(-45deg, rgb(212 175 98 / 0.05) 0 1px, transparent 1px 22px);
+}
+
+@utility shell-container {
+  width: 100%;
+  margin-inline: auto;
+  max-width: 96rem;
+  padding-inline: 1rem;
+  @media (width >= 40rem) { padding-inline: 1.5rem; }
+  @media (width >= 80rem) { padding-inline: 2rem; }
+}
+
+/* Referenced from inline styles, so defined outside @theme to always be emitted. */
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0); opacity: 0.25; }
+  50% { transform: translateY(-14px); opacity: 1; }
+}
+@keyframes reel-blur {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+/* DEMO marking: diagonal gold hazard stripes used on every demo wallet surface. */
+@utility bg-demo-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgb(212 175 98 / 0.16) 0 10px,
+    rgb(212 175 98 / 0.04) 10px 20px
+  );
+}
+
+/* Gold range slider (sound volume). --pct is set inline to fill the track. */
+.rc-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+}
+.rc-range:disabled { cursor: not-allowed; }
+.rc-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-gold) var(--pct, 50%), var(--color-surface-3) var(--pct, 50%));
+}
+.rc-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-surface-3); }
+.rc-range::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--color-gold); }
+.rc-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -7px;
+  height: 18px;
+  width: 18px;
+  border-radius: 999px;
+  background: #f1d99b;
+  border: 2px solid var(--color-ink);
+  box-shadow: 0 0 0 1px var(--color-gold), 0 4px 10px rgb(0 0 0 / 0.6);
+}
+.rc-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: #f1d99b;
+  border: 2px solid var(--color-ink);
+  box-shadow: 0 0 0 1px var(--color-gold);
+}
+
+/* Route change: content settles in quickly. Respects reduced motion via the base rule. */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.rc-page-in { animation: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Navigation progress bar: eases towards 90% while the next page loads. */
+@keyframes nav-bar {
+  0% { transform: translateX(-100%); }
+  20% { transform: translateX(-60%); }
+  100% { transform: translateX(-8%); }
+}
+.rc-nav-bar { animation: nav-bar 8s cubic-bezier(0.08, 0.8, 0.2, 1) forwards; }
+@keyframes skeleton-in { from { opacity: 0; } to { opacity: 1; } }
+.rc-skeleton-in { animation: skeleton-in 0.18s ease-out both; }
